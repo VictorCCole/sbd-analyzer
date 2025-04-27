@@ -1,0 +1,22 @@
+# ========================================
+# CONFIGURAÇÕES GERAIS DO PROJETO
+# ========================================
+
+# Squat (Agachamento)
+ANGULO_MINIMO_PROFUNDIDADE_SQUAT = 100
+TOLERANCIA_QUADRIL_SQUAT = 5
+MIN_SUBIDA_OMBRO_SQUAT = 3
+FRAMES_ANALISE_SQUAT = 15
+
+# Deadlift (Levantamento Terra)
+TOLERANCIA_QUADRIL_DEADLIFT = 5
+MIN_SUBIDA_OMBRO_DEADLIFT = 3
+FRAMES_ANALISE_DEADLIFT = 15
+
+# Bench Press (Supino)
+MARGEM_PEITO_BENCH = 15
+ANGULO_MINIMO_EXTENSAO_BENCH = 160
+
+# Redimensionamento de Vídeo
+MAX_WIDTH = 640
+MAX_HEIGHT = 640

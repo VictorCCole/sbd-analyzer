@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import math
 from core.utils import ponto_em_pixels, redimensionar
+import core.config as config
 
 mp_pose = mp.solutions.pose
 
@@ -9,12 +10,12 @@ mp_pose = mp.solutions.pose
 # 🎛️ CONFIGURAÇÕES DO SISTEMA
 # ========================================
 
-ANGULO_MINIMO_PROFUNDIDADE = 100
-TOLERANCIA_QUADRIL = 5
-MIN_SUBIDA_OMBRO = 3
-FRAMES_ANALISE = 15
-MAX_WIDTH = 640
-MAX_HEIGHT = 640
+ANGULO_MINIMO_PROFUNDIDADE = config.ANGULO_MINIMO_PROFUNDIDADE_SQUAT
+TOLERANCIA_QUADRIL = config.TOLERANCIA_QUADRIL_SQUAT
+MIN_SUBIDA_OMBRO = config.MIN_SUBIDA_OMBRO_SQUAT
+FRAMES_ANALISE = config.FRAMES_ANALISE_SQUAT
+MAX_WIDTH = config.MAX_WIDTH
+MAX_HEIGHT = config.MAX_HEIGHT
 
 # ========================================
 # FUNÇÕES AUXILIARES

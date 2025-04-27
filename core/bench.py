@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import math
 from core.utils import ponto_em_pixels, redimensionar
+import core.config as config
 
 mp_pose = mp.solutions.pose
 
@@ -9,10 +10,10 @@ mp_pose = mp.solutions.pose
 # 🎛️ CONFIGURAÇÕES DO SISTEMA
 # ========================================
 
-MARGEM_PEITO = 15             # Margem em pixels para detectar toque no peito
-ANGULO_MINIMO_EXTENSAO = 160  # Ângulo mínimo para considerar extensão completa
-MAX_WIDTH = 640
-MAX_HEIGHT = 640
+MARGEM_PEITO = config.MARGEM_PEITO_BENCH
+ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH
+MAX_WIDTH = config.MAX_WIDTH
+MAX_HEIGHT = config.MAX_HEIGHT
 
 # ========================================
 # FUNÇÕES AUXILIARES

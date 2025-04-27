@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 from core.utils import ponto_em_pixels, redimensionar
+import core.config as config
 
 mp_pose = mp.solutions.pose
 
@@ -8,11 +9,11 @@ mp_pose = mp.solutions.pose
 # 🎛️ CONFIGURAÇÕES DO SISTEMA
 # ========================================
 
-TOLERANCIA_QUADRIL = 5
-MIN_SUBIDA_OMBRO = 3
-FRAMES_ANALISE = 15
-MAX_WIDTH = 640
-MAX_HEIGHT = 640
+TOLERANCIA_QUADRIL = config.TOLERANCIA_QUADRIL_DEADLIFT
+MIN_SUBIDA_OMBRO = config.MIN_SUBIDA_OMBRO_DEADLIFT
+FRAMES_ANALISE = config.FRAMES_ANALISE_DEADLIFT
+MAX_WIDTH = config.MAX_WIDTH
+MAX_HEIGHT = config.MAX_HEIGHT
 
 # ========================================
 # FUNÇÕES AUXILIARES
@@ -88,9 +89,9 @@ def analisar_deadlift(cap):
 
                 if all(resultado is not None for resultado in subida_resultado.values()):
                     if all(resultado == "coordenada" for resultado in subida_resultado.values()):
-                        feedback_subida_geral = "✅ Subida coordenada"
+                        feedback_subida_geral = "Subida coordenada"
                     else:
-                        feedback_subida_geral = "❌ Subida desequilibrada"
+                        feedback_subida_geral = "Subida desequilibrada"
                     subida_resultado = {"direito": None, "esquerdo": None}
 
             if frame is not None:
