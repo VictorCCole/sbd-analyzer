@@ -3,10 +3,10 @@ from core import squat, deadlift, bench  # Agora importa também o bench
 
 # Escolha o movimento
 #movimento = "squat"
-#movimento = "bench"
-movimento = "deadlift"
+movimento = "bench"
+#movimento = "deadlift"
 
-video_path = "media/nat/nat_sumo.mp4"
+video_path = "media/nat/nat_bench.mp4"
 cap = load_video(video_path)
 
 if movimento == "squat":

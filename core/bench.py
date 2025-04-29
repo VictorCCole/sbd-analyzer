@@ -10,8 +10,8 @@ mp_pose = mp.solutions.pose
 # 🎛️ CONFIGURAÇÕES DO SISTEMA
 # ========================================
 
-MARGEM_PEITO = config.MARGEM_PEITO_BENCH
-ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH
+MARGEM_PEITO = config.MARGEM_PEITO_BENCH  # Ajustado para mais precisão
+ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH  # Ajustado para mais exigência
 MAX_WIDTH = config.MAX_WIDTH
 MAX_HEIGHT = config.MAX_HEIGHT
 
