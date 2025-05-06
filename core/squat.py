@@ -5,7 +5,6 @@ import core.config as config
 
 mp_pose = mp.solutions.pose
 
-# CONFIGS
 TOLERANCIA_QUADRIL = config.TOLERANCIA_QUADRIL_SQUAT
 MIN_SUBIDA_OMBRO = config.MIN_SUBIDA_OMBRO_SQUAT
 FRAMES_ANALISE = config.FRAMES_ANALISE_SQUAT
@@ -19,7 +18,6 @@ def analisar_squat(cap):
     buffer_subida = {"direito": [], "esquerdo": []}
     contador_frames = {"direito": 0, "esquerdo": 0}
     profundidade_atingida = {"direito": False, "esquerdo": False}
-    tronco_ok = {"direito": True, "esquerdo": True}
     subida_resultado = {"direito": None, "esquerdo": None}
 
     resultado_profundidade = ""
@@ -45,19 +43,21 @@ def analisar_squat(cap):
                              mp_pose.PoseLandmark.LEFT_ANKLE, mp_pose.PoseLandmark.LEFT_SHOULDER)
             }
 
+            angulos_tronco = {}
+
             for lado, (hip_id, knee_id, ankle_id, shoulder_id) in lados.items():
                 hip_x, hip_y = ponto_em_pixels(lm[hip_id], w, h)
                 knee_x, knee_y = ponto_em_pixels(lm[knee_id], w, h)
                 ankle_x, ankle_y = ponto_em_pixels(lm[ankle_id], w, h)
                 shoulder_x, shoulder_y = ponto_em_pixels(lm[shoulder_id], w, h)
 
-                # Profundidade com base em ângulo do joelho
+                # Profundidade via ângulo do joelho
                 angulo_joelho = calcular_angulo((hip_x, hip_y), (knee_x, knee_y), (ankle_x, ankle_y))
                 profundidade_atingida[lado] = angulo_joelho > ANGULO_MINIMO_PROFUNDIDADE
 
                 # Inclinação do tronco
                 angulo_tronco = calcular_angulo((ankle_x, ankle_y), (hip_x, hip_y), (shoulder_x, shoulder_y))
-                tronco_ok[lado] = angulo_tronco < ANGULO_MAXIMO_TRONCO
+                angulos_tronco[lado] = angulo_tronco
 
                 # Subida coordenada
                 if not modo_analise[lado]:
@@ -82,23 +82,26 @@ def analisar_squat(cap):
                         else:
                             subida_resultado[lado] = "coordenada"
 
-        # Consolidar os feedbacks uma única vez
+        # Profundidade
         if not resultado_profundidade and any(profundidade_atingida.values()):
             resultado_profundidade = "✅ Profundidade adequada – o ângulo do joelho indica amplitude satisfatória."
         elif not resultado_profundidade:
             resultado_profundidade = "❌ Profundidade insuficiente – o joelho não flexionou o suficiente para caracterizar um agachamento válido."
 
+        # Subida coordenada
         if all(subida_resultado.values()) and not resultado_subida:
             if all(r == "coordenada" for r in subida_resultado.values()):
                 resultado_subida = "✅ Subida coordenada – quadris e ombros subiram juntos de forma eficiente."
             else:
                 resultado_subida = "❌ Subida desequilibrada – os quadris subiram antes dos ombros, indicando falha na coordenação."
 
-        if not resultado_tronco and all(v is not None for v in tronco_ok.values()):
-            if all(tronco_ok.values()):
-                resultado_tronco = "✅ Postura do tronco correta – a inclinação está dentro dos parâmetros técnicos."
-            else:
+        # Postura do tronco (avaliar o lado mais inclinado = menor ângulo)
+        if not resultado_tronco and len(angulos_tronco) == 2:
+            pior_angulo = min(angulos_tronco.values())
+            if pior_angulo < ANGULO_MAXIMO_TRONCO:
                 resultado_tronco = "❌ Postura do tronco inadequada – houve inclinação excessiva do tronco durante o movimento."
+            else:
+                resultado_tronco = "✅ Postura do tronco correta – a inclinação está dentro dos parâmetros técnicos."
 
     cap.release()
 
