@@ -3,10 +3,11 @@
 # ========================================
 
 # Squat (Agachamento)
-ANGULO_MINIMO_PROFUNDIDADE_SQUAT = 100
+ANGULO_MINIMO_PROFUNDIDADE_SQUAT = 100  # ângulo do joelho
 TOLERANCIA_QUADRIL_SQUAT = 5
 MIN_SUBIDA_OMBRO_SQUAT = 3
 FRAMES_ANALISE_SQUAT = 15
+ANGULO_MAXIMO_TRONCO = 50  # graus
 
 # Deadlift (Levantamento Terra)
 TOLERANCIA_QUADRIL_DEADLIFT = 5

@@ -5,10 +5,12 @@ import core.config as config
 
 mp_pose = mp.solutions.pose
 
+# CONFIGS
 TOLERANCIA_QUADRIL = config.TOLERANCIA_QUADRIL_SQUAT
 MIN_SUBIDA_OMBRO = config.MIN_SUBIDA_OMBRO_SQUAT
 FRAMES_ANALISE = config.FRAMES_ANALISE_SQUAT
-ANGULO_MAXIMO_TRONCO = 50  # graus
+ANGULO_MINIMO_PROFUNDIDADE = config.ANGULO_MINIMO_PROFUNDIDADE_SQUAT
+ANGULO_MAXIMO_TRONCO = config.ANGULO_MAXIMO_TRONCO
 
 def analisar_squat(cap):
     pose = mp_pose.Pose()
@@ -16,9 +18,8 @@ def analisar_squat(cap):
     modo_analise = {"direito": False, "esquerdo": False}
     buffer_subida = {"direito": [], "esquerdo": []}
     contador_frames = {"direito": 0, "esquerdo": 0}
-    profundidade_status = {"direito": False, "esquerdo": False}
-    tronco_status = {"direito": True, "esquerdo": True}
-    profundidade_alcancada = False
+    profundidade_atingida = {"direito": False, "esquerdo": False}
+    tronco_ok = {"direito": True, "esquerdo": True}
     subida_resultado = {"direito": None, "esquerdo": None}
 
     resultado_profundidade = ""
@@ -50,13 +51,13 @@ def analisar_squat(cap):
                 ankle_x, ankle_y = ponto_em_pixels(lm[ankle_id], w, h)
                 shoulder_x, shoulder_y = ponto_em_pixels(lm[shoulder_id], w, h)
 
-                # Profundidade (uma vez)
-                if not profundidade_alcancada and hip_y > knee_y:
-                    profundidade_status[lado] = True
+                # Profundidade com base em ângulo do joelho
+                angulo_joelho = calcular_angulo((hip_x, hip_y), (knee_x, knee_y), (ankle_x, ankle_y))
+                profundidade_atingida[lado] = angulo_joelho > ANGULO_MINIMO_PROFUNDIDADE
 
                 # Inclinação do tronco
                 angulo_tronco = calcular_angulo((ankle_x, ankle_y), (hip_x, hip_y), (shoulder_x, shoulder_y))
-                tronco_status[lado] = angulo_tronco < ANGULO_MAXIMO_TRONCO
+                tronco_ok[lado] = angulo_tronco < ANGULO_MAXIMO_TRONCO
 
                 # Subida coordenada
                 if not modo_analise[lado]:
@@ -81,25 +82,23 @@ def analisar_squat(cap):
                         else:
                             subida_resultado[lado] = "coordenada"
 
-        # Consolidar os feedbacks apenas uma vez
-        if not profundidade_alcancada:
-            if any(profundidade_status.values()):
-                resultado_profundidade = "✅ Profundidade adequada"
-            else:
-                resultado_profundidade = "❌ Profundidade insuficiente"
-            profundidade_alcancada = True
+        # Consolidar os feedbacks uma única vez
+        if not resultado_profundidade and any(profundidade_atingida.values()):
+            resultado_profundidade = "✅ Profundidade adequada – o ângulo do joelho indica amplitude satisfatória."
+        elif not resultado_profundidade:
+            resultado_profundidade = "❌ Profundidade insuficiente – o joelho não flexionou o suficiente para caracterizar um agachamento válido."
 
         if all(subida_resultado.values()) and not resultado_subida:
             if all(r == "coordenada" for r in subida_resultado.values()):
-                resultado_subida = "✅ Subida coordenada"
+                resultado_subida = "✅ Subida coordenada – quadris e ombros subiram juntos de forma eficiente."
             else:
-                resultado_subida = "❌ Subida desequilibrada"
+                resultado_subida = "❌ Subida desequilibrada – os quadris subiram antes dos ombros, indicando falha na coordenação."
 
-        if not resultado_tronco and all(v is not None for v in tronco_status.values()):
-            if all(tronco_status.values()):
-                resultado_tronco = "✅ Postura do tronco correta"
+        if not resultado_tronco and all(v is not None for v in tronco_ok.values()):
+            if all(tronco_ok.values()):
+                resultado_tronco = "✅ Postura do tronco correta – a inclinação está dentro dos parâmetros técnicos."
             else:
-                resultado_tronco = "❌ Postura do tronco inadequada"
+                resultado_tronco = "❌ Postura do tronco inadequada – houve inclinação excessiva do tronco durante o movimento."
 
     cap.release()
 
