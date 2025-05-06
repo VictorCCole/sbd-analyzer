@@ -16,6 +16,8 @@ FRAMES_ANALISE_DEADLIFT = 15
 # Bench Press (Supino)
 MARGEM_PEITO_BENCH = 10
 ANGULO_MINIMO_EXTENSAO_BENCH = 165
+FRAMES_ANALISE_BENCH = 20  # <- Novo: número de frames analisados para descida/subida
+TOLERANCIA_MOVIMENTO_BENCH = 2  # <- Novo: tolerância mínima de mudança para considerar descida/subida
 
 # Redimensionamento de Vídeo
 MAX_WIDTH = 640

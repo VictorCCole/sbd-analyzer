@@ -1,119 +1,110 @@
 import cv2
 import mediapipe as mp
 import math
-from core.utils import ponto_em_pixels, redimensionar
+from core.utils import ponto_em_pixels, redimensionar, calcular_angulo
 import core.config as config
 
 mp_pose = mp.solutions.pose
 
-# ========================================
-# 🎛️ CONFIGURAÇÕES DO SISTEMA
-# ========================================
-
-MARGEM_PEITO = config.MARGEM_PEITO_BENCH  # Ajustado para mais precisão
-ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH  # Ajustado para mais exigência
+MARGEM_PEITO = config.MARGEM_PEITO_BENCH
+ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH
+FRAMES_ANALISE = config.FRAMES_ANALISE_BENCH
+TOLERANCIA_MOVIMENTO = config.TOLERANCIA_MOVIMENTO_BENCH
 MAX_WIDTH = config.MAX_WIDTH
 MAX_HEIGHT = config.MAX_HEIGHT
 
-# ========================================
-# FUNÇÕES AUXILIARES
-# ========================================
 
-def calcular_angulo(a, b, c):
-    """Calcula o ângulo entre três pontos."""
-    angulo = math.degrees(
-        math.atan2(c[1] - b[1], c[0] - b[0]) -
-        math.atan2(a[1] - b[1], a[0] - b[0])
-    )
-    angulo = abs(angulo)
-    if angulo > 180:
-        angulo = 360 - angulo
-    return angulo
+def bench(cap):
+    pose = mp_pose.Pose(model_complexity=1)
 
-# ========================================
-# INÍCIO DO CÓDIGO
-# ========================================
+    buffer_movimento = []
+    toque_valido = False
+    extensao_valida = False
 
-def analisar_bench(cap):
-    pose = mp_pose.Pose()
-    mp_draw = mp.solutions.drawing_utils
+    contato_ombros = True
+    contato_gluteo = True
+    contato_cabeca = True
+    contato_pes = True
 
-    tocou_peito = {"direito": False, "esquerdo": False}
-    extensao_completa = {"direito": False, "esquerdo": False}
-    feedback_geral_peito = ""
-    feedback_geral_extensao = ""
-    paused = False
-    frame = None
+    frame_inicial = None
 
     while True:
-        if not paused or frame is None:
-            ret, frame = cap.read()
-            if not ret:
-                print("⚠️ Fim do vídeo ou erro na leitura.")
-                break
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = pose.process(image_rgb)
+        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(image_rgb)
 
-            if results.pose_landmarks:
-                h, w, _ = frame.shape
-                landmarks = results.pose_landmarks.landmark
+        if results.pose_landmarks:
+            h, w, _ = frame.shape
+            lm = results.pose_landmarks.landmark
 
-                mp_draw.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            # Posições principais
+            ankle_y = (lm[mp_pose.PoseLandmark.LEFT_ANKLE].y + lm[mp_pose.PoseLandmark.RIGHT_ANKLE].y) / 2 * h
+            hip_y = (lm[mp_pose.PoseLandmark.LEFT_HIP].y + lm[mp_pose.PoseLandmark.RIGHT_HIP].y) / 2 * h
+            shoulder_y = (lm[mp_pose.PoseLandmark.LEFT_SHOULDER].y + lm[mp_pose.PoseLandmark.RIGHT_SHOULDER].y) / 2 * h
+            nose_y = lm[mp_pose.PoseLandmark.NOSE].y * h
 
-                lados = {
-                    "direito": (mp_pose.PoseLandmark.RIGHT_SHOULDER, mp_pose.PoseLandmark.RIGHT_ELBOW, mp_pose.PoseLandmark.RIGHT_WRIST),
-                    "esquerdo": (mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.LEFT_ELBOW, mp_pose.PoseLandmark.LEFT_WRIST)
+            wrist_esq_y = lm[mp_pose.PoseLandmark.LEFT_WRIST].y * h
+            wrist_dir_y = lm[mp_pose.PoseLandmark.RIGHT_WRIST].y * h
+            barra_y = (wrist_esq_y + wrist_dir_y) / 2
+
+            buffer_movimento.append(barra_y)
+            if len(buffer_movimento) > FRAMES_ANALISE:
+                buffer_movimento.pop(0)
+
+            if frame_inicial is None:
+                frame_inicial = {
+                    "ankle_y": ankle_y,
+                    "hip_y": hip_y,
+                    "shoulder_y": shoulder_y,
+                    "nose_y": nose_y
                 }
 
-                for lado, (shoulder_id, elbow_id, wrist_id) in lados.items():
-                    shoulder_x, shoulder_y = ponto_em_pixels(landmarks[shoulder_id], w, h)
-                    elbow_x, elbow_y = ponto_em_pixels(landmarks[elbow_id], w, h)
-                    wrist_x, wrist_y = ponto_em_pixels(landmarks[wrist_id], w, h)
+            # Toque no peito detectado por descida + subida + profundidade
+            if not toque_valido and len(buffer_movimento) >= FRAMES_ANALISE:
+                min_index = buffer_movimento.index(max(buffer_movimento))
+                descendo = all(buffer_movimento[i] <= buffer_movimento[i + 1] + TOLERANCIA_MOVIMENTO for i in range(min_index))
+                subindo = all(buffer_movimento[i] >= buffer_movimento[i + 1] - TOLERANCIA_MOVIMENTO for i in range(min_index, len(buffer_movimento) - 1))
+                if max(buffer_movimento) >= (shoulder_y + MARGEM_PEITO) and descendo and subindo:
+                    toque_valido = True
 
-                    # Verificar toque no peito
-                    if not tocou_peito[lado]:
-                        if wrist_y > (shoulder_y + MARGEM_PEITO):
-                            tocou_peito[lado] = True
+            # Extensão dos braços após toque válido
+            if toque_valido and not extensao_valida:
+                a = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_SHOULDER], w, h)
+                b = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_ELBOW], w, h)
+                c = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_WRIST], w, h)
+                angulo = calcular_angulo(a, b, c)
+                if angulo > ANGULO_MINIMO_EXTENSAO:
+                    extensao_valida = True
 
-                    # Verificar extensão completa
-                    if not extensao_completa[lado]:
-                        angulo_cotovelo = calcular_angulo((shoulder_x, shoulder_y), (elbow_x, elbow_y), (wrist_x, wrist_y))
-                        if angulo_cotovelo > ANGULO_MINIMO_EXTENSAO:
-                            extensao_completa[lado] = True
+            # CONTATO COM O BANCO E O CHÃO
+            contato_pes = ankle_y >= frame_inicial["ankle_y"] - 5
+            contato_gluteo = hip_y >= frame_inicial["hip_y"] - 5
+            contato_ombros = shoulder_y >= frame_inicial["shoulder_y"] - 5
+            contato_cabeca = nose_y >= frame_inicial["nose_y"] - 5
 
-                # Avaliação geral do toque no peito
-                if all(tocou_peito.values()):
-                    feedback_geral_peito = "✅ Toque no peito realizado"
-                else:
-                    feedback_geral_peito = "❌ Toque no peito não detectado"
+        # Exibição
+        frame_show = redimensionar(frame, MAX_WIDTH, MAX_HEIGHT)
+        y = 40
+        def show(fb, ok):
+            cor = (0, 255, 0) if ok else (0, 0, 255)
+            texto = f"✅ {fb}" if ok else f"❌ {fb}"
+            nonlocal y
+            cv2.putText(frame_show, texto, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, cor, 2)
+            y += 35
 
-                # Avaliação geral da extensão
-                if all(extensao_completa.values()):
-                    feedback_geral_extensao = "✅ Extensão completa"
-                else:
-                    feedback_geral_extensao = "❌ Extensão incompleta"
+        show("Toque no peito", toque_valido)
+        show("Extensão dos cotovelos", extensao_valida)
+        show("Pés no chão", contato_pes)
+        show("Glúteo no banco", contato_gluteo)
+        show("Ombros no banco", contato_ombros)
+        show("Cabeça no banco", contato_cabeca)
 
-            if frame is not None:
-                frame_show = redimensionar(frame, MAX_WIDTH, MAX_HEIGHT)
-
-                y_offset = 40
-                if feedback_geral_peito:
-                    cor = (0, 255, 0) if "✅" in feedback_geral_peito else (0, 0, 255)
-                    cv2.putText(frame_show, feedback_geral_peito, (20, y_offset),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2)
-                    y_offset += 40
-
-                if feedback_geral_extensao:
-                    cor = (0, 255, 0) if "✅" in feedback_geral_extensao else (0, 0, 255)
-                    cv2.putText(frame_show, feedback_geral_extensao, (20, y_offset),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2)
-
-                cv2.imshow("Análise Bench Press", frame_show)
-
-            key = cv2.waitKey(30) & 0xFF
-            if key == 27:
-                break
+        cv2.imshow("Bench Press - IPF Check", frame_show)
+        if cv2.waitKey(30) & 0xFF == 27:
+            break
 
     cap.release()
     cv2.destroyAllWindows()

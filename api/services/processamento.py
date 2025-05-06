@@ -1,27 +1,23 @@
-from core import squat
 import cv2
-import mediapipe as mp
+from core import squat, bench, deadlift
+from api.services.email_service import enviar_feedback_email
 
-def processar_agachamento(caminho_video: str):
-    mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose()
+async def processar_video(caminho_video, movimento, nome, email):
     cap = cv2.VideoCapture(caminho_video)
-    resultados = []
+    feedbacks = []
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    if movimento == "squat":
+        feedbacks = squat.analisar_squat(cap)  # deve retornar uma lista de strings
+    elif movimento == "bench":
+        feedbacks = bench.bench(cap)
+    elif movimento == "deadlift":
+        feedbacks = deadlift.analisar_deadlift(cap)
 
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image_rgb)
+    await enviar_feedback_email(
+        email=email,
+        nome=nome,
+        movimento=movimento,
+        feedbacks=feedbacks
+    )
 
-        if results.pose_landmarks:
-            h, w, _ = frame.shape
-            feedback = squat.analisar(frame, results.pose_landmarks.landmark, h, w)
-            resultados.append(feedback)
-
-    cap.release()
-
-    # Retorna o último frame analisado como exemplo
-    return resultados[-1] if resultados else {"erro": "Sem pose detectada"}
+    return {"status": "Análise concluída", "feedbacks": feedbacks}

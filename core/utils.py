@@ -1,4 +1,5 @@
 import cv2
+import math
 
 def ponto_em_pixels(landmark, largura, altura):
     """Converte ponto normalizado em coordenadas de pixel."""
@@ -31,3 +32,14 @@ def load_video(path):
     if not cap.isOpened():
         raise ValueError(f"Erro ao abrir o vídeo: {path}")
     return cap
+
+def calcular_angulo(a, b, c):
+    """Calcula o ângulo entre três pontos (em pixels)."""
+    angulo = math.degrees(
+        math.atan2(c[1] - b[1], c[0] - b[0]) -
+        math.atan2(a[1] - b[1], a[0] - b[0])
+    )
+    angulo = abs(angulo)
+    if angulo > 180:
+        angulo = 360 - angulo
+    return angulo

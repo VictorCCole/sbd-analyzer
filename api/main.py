@@ -1,6 +1,11 @@
 from fastapi import FastAPI
-from api.routes.video import router as video_router
+from api.routers import analise
 
-app = FastAPI(title="SBD Analyzer API")
+app = FastAPI(
+    title="Análise de Powerlifting",
+    description="API para análise de movimentos: agachamento, supino e levantamento terra",
+    version="1.0.0"
+)
 
-app.include_router(video_router, prefix="/analisar")
+# Inclui o roteador com prefixo /analisar
+app.include_router(analise.router, prefix="/analisar", tags=["Análise"])
