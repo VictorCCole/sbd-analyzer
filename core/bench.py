@@ -1,32 +1,32 @@
 import cv2
 import mediapipe as mp
-import math
-from core.utils import ponto_em_pixels, redimensionar, calcular_angulo
+from core.utils import ponto_em_pixels, calcular_angulo
 import core.config as config
 
 mp_pose = mp.solutions.pose
 
+# Configurações
 MARGEM_PEITO = config.MARGEM_PEITO_BENCH
 ANGULO_MINIMO_EXTENSAO = config.ANGULO_MINIMO_EXTENSAO_BENCH
 FRAMES_ANALISE = config.FRAMES_ANALISE_BENCH
 TOLERANCIA_MOVIMENTO = config.TOLERANCIA_MOVIMENTO_BENCH
-MAX_WIDTH = config.MAX_WIDTH
-MAX_HEIGHT = config.MAX_HEIGHT
-
+TOLERANCIA_CONTATO = 10  # margem extra para considerar contato válido
 
 def bench(cap):
     pose = mp_pose.Pose(model_complexity=1)
-
     buffer_movimento = []
     toque_valido = False
     extensao_valida = False
 
-    contato_ombros = True
-    contato_gluteo = True
-    contato_cabeca = True
-    contato_pes = True
+    contatos = {
+        "ombros": True,
+        "gluteo": True,
+        "cabeca": True,
+        "pes": True
+    }
 
     frame_inicial = None
+    lado_analise = "esquerdo"  # default até sabermos o lado mais visível
 
     while True:
         ret, frame = cap.read()
@@ -40,16 +40,18 @@ def bench(cap):
             h, w, _ = frame.shape
             lm = results.pose_landmarks.landmark
 
-            # Posições principais
+            # Coordenadas médias para referência de contato
             ankle_y = (lm[mp_pose.PoseLandmark.LEFT_ANKLE].y + lm[mp_pose.PoseLandmark.RIGHT_ANKLE].y) / 2 * h
             hip_y = (lm[mp_pose.PoseLandmark.LEFT_HIP].y + lm[mp_pose.PoseLandmark.RIGHT_HIP].y) / 2 * h
             shoulder_y = (lm[mp_pose.PoseLandmark.LEFT_SHOULDER].y + lm[mp_pose.PoseLandmark.RIGHT_SHOULDER].y) / 2 * h
             nose_y = lm[mp_pose.PoseLandmark.NOSE].y * h
 
+            # Detectar lado com maior variação no punho (visível)
             wrist_esq_y = lm[mp_pose.PoseLandmark.LEFT_WRIST].y * h
             wrist_dir_y = lm[mp_pose.PoseLandmark.RIGHT_WRIST].y * h
-            barra_y = (wrist_esq_y + wrist_dir_y) / 2
+            lado_analise = "esquerdo" if abs(wrist_esq_y - shoulder_y) > abs(wrist_dir_y - shoulder_y) else "direito"
 
+            barra_y = max(wrist_esq_y, wrist_dir_y)
             buffer_movimento.append(barra_y)
             if len(buffer_movimento) > FRAMES_ANALISE:
                 buffer_movimento.pop(0)
@@ -62,7 +64,7 @@ def bench(cap):
                     "nose_y": nose_y
                 }
 
-            # Toque no peito detectado por descida + subida + profundidade
+            # Toque no peito
             if not toque_valido and len(buffer_movimento) >= FRAMES_ANALISE:
                 min_index = buffer_movimento.index(max(buffer_movimento))
                 descendo = all(buffer_movimento[i] <= buffer_movimento[i + 1] + TOLERANCIA_MOVIMENTO for i in range(min_index))
@@ -70,41 +72,48 @@ def bench(cap):
                 if max(buffer_movimento) >= (shoulder_y + MARGEM_PEITO) and descendo and subindo:
                     toque_valido = True
 
-            # Extensão dos braços após toque válido
+            # Extensão dos cotovelos
             if toque_valido and not extensao_valida:
-                a = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_SHOULDER], w, h)
-                b = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_ELBOW], w, h)
-                c = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_WRIST], w, h)
+                if lado_analise == "esquerdo":
+                    a = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_SHOULDER], w, h)
+                    b = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_ELBOW], w, h)
+                    c = ponto_em_pixels(lm[mp_pose.PoseLandmark.LEFT_WRIST], w, h)
+                else:
+                    a = ponto_em_pixels(lm[mp_pose.PoseLandmark.RIGHT_SHOULDER], w, h)
+                    b = ponto_em_pixels(lm[mp_pose.PoseLandmark.RIGHT_ELBOW], w, h)
+                    c = ponto_em_pixels(lm[mp_pose.PoseLandmark.RIGHT_WRIST], w, h)
+
                 angulo = calcular_angulo(a, b, c)
                 if angulo > ANGULO_MINIMO_EXTENSAO:
                     extensao_valida = True
 
-            # CONTATO COM O BANCO E O CHÃO
-            contato_pes = ankle_y >= frame_inicial["ankle_y"] - 5
-            contato_gluteo = hip_y >= frame_inicial["hip_y"] - 5
-            contato_ombros = shoulder_y >= frame_inicial["shoulder_y"] - 5
-            contato_cabeca = nose_y >= frame_inicial["nose_y"] - 5
-
-        # Exibição
-        frame_show = redimensionar(frame, MAX_WIDTH, MAX_HEIGHT)
-        y = 40
-        def show(fb, ok):
-            cor = (0, 255, 0) if ok else (0, 0, 255)
-            texto = f"✅ {fb}" if ok else f"❌ {fb}"
-            nonlocal y
-            cv2.putText(frame_show, texto, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, cor, 2)
-            y += 35
-
-        show("Toque no peito", toque_valido)
-        show("Extensão dos cotovelos", extensao_valida)
-        show("Pés no chão", contato_pes)
-        show("Glúteo no banco", contato_gluteo)
-        show("Ombros no banco", contato_ombros)
-        show("Cabeça no banco", contato_cabeca)
-
-        cv2.imshow("Bench Press - IPF Check", frame_show)
-        if cv2.waitKey(30) & 0xFF == 27:
-            break
+            # Contato com o banco
+            contatos["pes"] = ankle_y >= frame_inicial["ankle_y"] - TOLERANCIA_CONTATO
+            contatos["gluteo"] = hip_y >= frame_inicial["hip_y"] - TOLERANCIA_CONTATO
+            contatos["ombros"] = shoulder_y >= frame_inicial["shoulder_y"] - TOLERANCIA_CONTATO
+            contatos["cabeca"] = nose_y >= frame_inicial["nose_y"] - TOLERANCIA_CONTATO
 
     cap.release()
-    cv2.destroyAllWindows()
+
+    # Retorno estruturado para API
+    resultado = []
+
+    resultado.append("✅ Toque no peito – a barra chegou à altura adequada." if toque_valido
+                     else "❌ Toque no peito ausente – a barra não chegou à altura mínima do tórax com controle.")
+
+    resultado.append("✅ Extensão dos cotovelos – finalização completa do movimento." if extensao_valida
+                     else "❌ Extensão dos cotovelos incompleta – os braços não foram estendidos após o toque.")
+
+    resultado.append("✅ Pés no chão – os pés permaneceram firmes no solo." if contatos["pes"]
+                     else "❌ Pés fora do chão – houve perda de contato com o solo.")
+
+    resultado.append("✅ Glúteo no banco – contato mantido durante a execução." if contatos["gluteo"]
+                     else "❌ Glúteo fora do banco – houve elevação ou perda de contato.")
+
+    resultado.append("✅ Ombros no banco – estabilidade adequada na parte superior." if contatos["ombros"]
+                     else "❌ Ombros fora do banco – instabilidade ou levantamento durante a execução.")
+
+    resultado.append("✅ Cabeça no banco – alinhamento técnico mantido." if contatos["cabeca"]
+                     else "❌ Cabeça fora do banco – houve elevação da cabeça durante o movimento.")
+
+    return resultado
