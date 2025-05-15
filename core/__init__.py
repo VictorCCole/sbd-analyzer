@@ -1,2 +1,3 @@
-from . import squat
-from . import utils
+from core import squat
+from core import bench
+from core import deadlift
